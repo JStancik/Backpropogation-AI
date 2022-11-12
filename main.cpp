@@ -7,9 +7,9 @@ int main(){
 	std::vector<std::vector<float>> expected = getExpected("train.csv",10,42000);
 	
 	std::cout<<"\n\n\n";
-	AINet network(784,4,256,10);
+	AINet network(784,4,64,10);
 
-	network.trainNet(inputs,expected,41900,500000,0.002f,1);
+	network.trainNet(inputs,expected,41900,1,0.002f,2);
 	
 	std::cout<<"\n\n\n";
 	std::vector<float> output;
@@ -41,6 +41,6 @@ int main(){
 		std::cout<<"Trial "<<i-41900<<": \033[m"<<"guess: \033[95m"<<outputIndex<<"\033[36m | \033[mactual: \033[95m"<<expectedIndex<<std::endl;
 	}
 
-	std::cout<<"\n\033[93mcorrect: "<<right<<" | incorrect: "<<wrong<<" | score: "<<(float)right/total*100<<"%\033[m";
+	std::cout<<"\n\033[93mcorrect: "<<right<<" | incorrect: "<<wrong<<" | "<<(float)right/total*100<<"% accuracy\033[m";
 	return 0;
 }

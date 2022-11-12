@@ -1,4 +1,5 @@
 #pragma once
+#include <ctime>
 #include <vector>
 
 struct Neuron{
@@ -25,6 +26,7 @@ class AINet{
 	public:
 		AINet(int inputCount,int hiddenLCount, int hiddenCount, int outputCount);
 		std::vector<float> getOutput(std::vector<float> input);
+		void               backPropogate(std::vector<float> &inputs,std::vector<float> &output,std::vector<float> &expected,float &learnSpeed);
 		std::vector<float> trainNet(std::vector<float> input,std::vector<float> expected, float learnSpeed,int debugLevel = 0);
 		void               trainNet(std::string dataFile,int dataCount,int iterations,    float learnSpeed,int debugLevel = 1);
 		void               trainNet(std::vector<std::vector<float>> inputs,std::vector<std::vector<float>> expected,int dataCount,int iterations,float learnSpeed,int debugLevel = 1);
@@ -33,6 +35,11 @@ class AINet{
 		void clearHiddenLayer();
 		std::vector<std::vector<Neuron>> hiddenLayers;
 		std::vector<Neuron> outputLayer;
+		clock_t debugTime;
+		int lastTimeStep;
+		int forwardPropTime;
+		int BackwardPropTime;
+		int miscTime;
 };
 
 class CNN{

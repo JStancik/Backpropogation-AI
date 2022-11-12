@@ -2,7 +2,6 @@
 #include <random>
 #include "network.hpp"
 #include "dataUtils.hpp"
-#include <array>
 
 AINet::AINet(int inputCount,int hiddenLCount, int hiddenCount, int outputCount){
 	for(int i=0;i<hiddenLCount;++i){
@@ -23,6 +22,7 @@ AINet::AINet(int inputCount,int hiddenLCount, int hiddenCount, int outputCount){
 		}
 		outputLayer[i].weights.push_back((float)rand()/RAND_MAX);
 	}
+	debugTime = clock();
 }
 
 std::vector<float> AINet::getOutput(std::vector<float> inputs){
@@ -60,17 +60,7 @@ std::vector<float> AINet::getOutput(std::vector<float> inputs){
 	return output;
 }
 
-void AINet::clearHiddenLayer(){
-	for(int i=0;i<hiddenLayers.size();++i){
-		for(int j=0;j<hiddenLayers[0].size();++j){
-			hiddenLayers[i][j].error=0;
-		}
-	}
-}
-
-std::vector<float> AINet::trainNet(std::vector<float> inputs,std::vector<float> expected,float learnSpeed,int debug){
-	std::vector<float> output = getOutput(inputs);
-
+void AINet::backPropogate(std::vector<float> &inputs,std::vector<float> &output,std::vector<float> &expected,float &learnSpeed){
 	float max = -10;
 	int outputIndex;
 	int expectedIndex;
@@ -84,15 +74,11 @@ std::vector<float> AINet::trainNet(std::vector<float> inputs,std::vector<float> 
 		}
 	}
 
-	if(debug == 2) std::cout<<"output errors:\n";
 	for(int i=0;i<outputLayer.size();++i){
 		outputLayer[i].error = (outputLayer[i].value-expected[i])*tanh_derivative(outputLayer[i].value);
-		if(debug == 2) std::cout<<"OE"<<i<<": "<<outputLayer[i].error<<"\n";
 	}
 	clearHiddenLayer();
-	if(debug == 2) std::cout<<"____________________\nhidden errors:\n";
 	for(int j=hiddenLayers.size()-1;j>=0;--j){
-		if(debug == 2) std::cout<<"L"<<j<<"\n";
 		std::vector<Neuron>* forwardLayer = j==hiddenLayers.size()-1?&outputLayer:&hiddenLayers[j+1];
 		for(int k=0;k<hiddenLayers[j].size();++k){
 			
@@ -102,30 +88,22 @@ std::vector<float> AINet::trainNet(std::vector<float> inputs,std::vector<float> 
 		}
 		for(int k=0;k<hiddenLayers[j].size();++k){
 				hiddenLayers[j][k].error *= tanh_derivative(hiddenLayers[j][k].value);
-				if(debug == 2) std::cout<<"  N"<<k<<": "<<hiddenLayers[j][k].error<<"\n";
 		}
 	}
-	if(debug == 2) std::cout<<"\n=OUTPUT WEIGHTS=\n";
 	
 	for(int i=0;i<outputLayer.size();++i){
-		if(debug == 2) std::cout<<"O"<<i<<":\n";
 		for(int j=0;j<outputLayer[i].weights.size();++j){
 			if(j!=outputLayer[i].weights.size()-1){
 				outputLayer[i].weights[j] -= learnSpeed*outputLayer[i].error*hiddenLayers.back()[j].value;
-				if(debug == 2) std::cout<<"  W"<<j<<": "<<outputLayer[i].weights[j]<<"\n";
 			}
 			else{
 				outputLayer[i].weights[j] -= learnSpeed*outputLayer[i].error;
-				if(debug == 2) std::cout<<"  B: "<<outputLayer[i].weights[j]<<"\n";
 			}
 		}
 	}
-	if(debug == 2) std::cout<<"\n=HIDDEN WEIGHTS=\n";
 
 	for(int i=0;i<hiddenLayers.size();++i){
-		if(debug == 2) std::cout<<"L"<<i<<":";
 		for(int j=0;j<hiddenLayers[i].size();++j){
-			if(debug == 2) std::cout<<"\n  N"<<j<<":\n";
 			for(int k=0;k<hiddenLayers[i][j].weights.size();++k){
 				if(k!=hiddenLayers[i][j].weights.size()-1){
 					float input;
@@ -136,32 +114,54 @@ std::vector<float> AINet::trainNet(std::vector<float> inputs,std::vector<float> 
 						input = hiddenLayers[i-1][k].value;
 					}
 					hiddenLayers[i][j].weights[k] -= learnSpeed*hiddenLayers[i][j].error*input;
-					if(debug == 2) std::cout<<"    W"<<k<<": "<<hiddenLayers[i][j].weights[k];;
 				}
 				else{
 					hiddenLayers[i][j].weights[k] -= learnSpeed*hiddenLayers[i][j].error;
-					if(debug == 2) std::cout<<"    B: "<<hiddenLayers[i][j].weights[k];
 				}
 			}
 		}
 	}
+}
 
+void AINet::clearHiddenLayer(){
+	for(int i=0;i<hiddenLayers.size();++i){
+		for(int j=0;j<hiddenLayers[0].size();++j){
+			hiddenLayers[i][j].error=0;
+		}
+	}
+}
 
+std::vector<float> AINet::trainNet(std::vector<float> inputs,std::vector<float> expected,float learnSpeed,int debug){
+	std::vector<float> output = getOutput(inputs);
+
+	debugTime = clock();
+	forwardPropTime = debugTime - lastTimeStep;
+
+	backPropogate(inputs,output,expected,learnSpeed);
+	
+	debugTime = clock();
+	BackwardPropTime = debugTime-forwardPropTime-lastTimeStep;
 	return output;
 }
 
-void AINet::trainNet(std::vector<std::vector<float>> inputs,std::vector<std::vector<float>> expected,int dataCount,int iterations,float learnSpeed,int debugLevel){
+void AINet::trainNet(std::vector<std::vector<float>> inputs,std::vector<std::vector<float>> expected,int dataCount,int epochs,float learnSpeed,int debugLevel){
 	std::vector<float> output;
 
-	if(debugLevel==1) std::cout<<"\033[34m\n\n=========================TRAINING=========================\n\n\n\n==========================================================\033[2A";
-	
+	if(debugLevel>0) std::cout<<"\033[34m\n\n=========================TRAINING=========================\n\n\n\n";
+	if(debugLevel>1) std::cout<<            "=========================TIMELINE=========================\n\n\n\n";
+	if(debugLevel>0) std::cout<<            "==========================================================";
+	if      (debugLevel==2) std::cout<<"\033[6A";
+	else if (debugLevel==1) std::cout<<"\033[2A";
 
+	miscTime = 0;
 	int totalCorrect = 0;
 	int recentCorrect = 0;
 	int recentCount = 1000;
 	std::vector<bool> lastRecent;
 
-	for(int i=0;i<iterations;++i){
+	for(int i=0;i<epochs*dataCount;++i){
+		debugTime = clock();
+		lastTimeStep = debugTime;
 		int index = i%(dataCount);
 		output = trainNet(inputs[index],expected[index],learnSpeed,debugLevel);
 		float max = -999;
@@ -190,8 +190,11 @@ void AINet::trainNet(std::vector<std::vector<float>> inputs,std::vector<std::vec
 			auto it = lastRecent.begin();
 			lastRecent.erase(it);
 		}
+		debugTime = clock();
 
-		if(debugLevel==1) std::cout<<"\r\033[93mexpected: \033[35m"<<expectedIndex<<"\033[93m | actual: \033[35m"<<outputIndex<<"\033[93m | correct: \033[32m"<<totalCorrect<<"\033[93m | \033[36m"<<"total: \033[36m"<<i+1<<"\033[93m | \033[36m"<<((float)recentCorrect*(i<recentCount?100:1)/(i<recentCount?i+1:recentCount/100))<<"%    ";
+		if(debugLevel>0) std::cout<<"\r\033[93m expected: \033[35m"<<expectedIndex<<"\033[93m | actual: \033[35m"<<outputIndex<<"\033[93m | correct: \033[32m"<<totalCorrect<<"\033[93m | \033[36m"<<"total: \033[36m"<<i+1<<"\033[93m | \033[36m"<<((float)recentCorrect*(i<recentCount?100:1)/(i<recentCount?i+1:recentCount/100))<<"%      ";
+		if(debugLevel>1) std::cout<<"\033[4B\r\033[31m forward: "<<forwardPropTime<<"ms | backward: "<<BackwardPropTime<<"ms | misc: "<<miscTime<<"ms\033[4A";
+		miscTime = debugTime-BackwardPropTime-forwardPropTime-lastTimeStep;
 	}
 }
 
